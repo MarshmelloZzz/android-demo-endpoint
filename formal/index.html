@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'"><title>管理后台入口</title>
+<style>body{font:17px/1.7 system-ui,sans-serif;background:#f3f6fa;color:#18283c;margin:0;padding:12vh 24px}main{max-width:520px;margin:auto;padding:32px;background:white;border-radius:16px;box-shadow:0 8px 32px #15274412}h1{font-size:26px}button,a{font:inherit}button{padding:10px 22px;background:#165dcc;color:white;border:0;border-radius:8px;cursor:pointer}small{color:#566477}a{color:#165dcc} [hidden]{display:none}</style></head>
+<body><main><h1>管理后台入口</h1><p id="status" role="status">正在获取最新后台地址…</p><a id="enter" hidden rel="noreferrer">进入管理后台</a><p><button id="retry" hidden>重新获取</button></p><small>请收藏本页地址。服务重启后，等待电脑显示 Configuration live，再通过本页进入。跳转后地址栏会显示当前临时域名。</small><noscript><p>请启用 JavaScript 后刷新页面。</p></noscript></main>
+<script>
+'use strict';
+const PUBLIC_KEY='MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAyjH+V70q+j0HOHffo0C63SQRT6sNNwcJknA5kT1sHlFdTvNa84pbEwxUf/mCxFDjLrRFHCOt4m6x7gEaTKb6d+OrGT1smQekJYZeOQubHFiqnTMyPBj2vKJnMklTWkT/ozlvyZ+wezCn8mkajys/SybSE8q12HeHKC6WuQO0aydtnNkmTupAdyQL14J1a0wlT3hFTp+7KVea6rKXhdH546+J4/X3UrvE08/rIVRAF4XGIKmRp0lQP9T7vioo7A+z7yUElWYTlR5J/IjLU7Iaec2/dueaJWsfRBnblkw/KujJzSf/nbv0qPnlEf0V5IvOE+BmYldmFAaa5mO03eoR5L6Q3qGnQDLsIS3uqcDIzeTNuaBMjjRT22THYC4Bn7R8D326bWZgenL07THj00vghXRkVsHkW7NTWXUc0nLFBcHRYc0mK+2DnJAMXX/dXUB673hkWb1qpyZPvsu8Y6hKYC62BecW1W3Yvl2RpwcFh11bz5GQeg9i6MnEGdZyAdWRAgMBAAE=';
+const status=document.getElementById('status'),retry=document.getElementById('retry'),enter=document.getElementById('enter');
+const decode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function openBackend(){
+ retry.hidden=true;enter.hidden=true;enter.removeAttribute('href');status.textContent='正在获取并验证最新后台地址…';
+ try{
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);let response,envelope;
+  try{response=await fetch('./endpoint.json?t='+Date.now(),{cache:'no-store',credentials:'omit',redirect:'error',signal:controller.signal});if(!response.ok)throw Error('config');const text=await response.text();if(text.length>16384)throw Error('size');envelope=JSON.parse(text);}finally{clearTimeout(timer);}
+  const key=await crypto.subtle.importKey('spki',decode(PUBLIC_KEY),{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
+  const payload=decode(envelope.payload);
+  if(!await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,decode(envelope.signature),payload))throw Error('signature');
+  const config=JSON.parse(new TextDecoder().decode(payload));const now=Date.now();
+  if(config.version!==1||!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(config.origin)||!Number.isSafeInteger(config.issuedAt)||!Number.isSafeInteger(config.expiresAt)||config.issuedAt>now+300000||config.expiresAt<=now||config.expiresAt<=config.issuedAt)throw Error('invalid');
+  status.textContent='地址验证成功，正在进入管理后台…';enter.href=config.origin+'/';enter.hidden=false;
+  location.replace(config.origin+'/');
+ }catch{status.textContent='暂时无法获取有效地址。请确认电脑服务已启动并显示 Configuration live，然后重试。';retry.hidden=false;}
+}
+retry.addEventListener('click',openBackend);openBackend();
+</script></body></html>
